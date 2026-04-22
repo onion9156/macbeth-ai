@@ -86,11 +86,6 @@
 
   .line.macbeth { align-self: flex-end; }
   .line.ai { align-self: flex-start; }
-  .line.narrator {
-    align-self: center;
-    text-align: center;
-    max-width: 92%;
-  }
 
   .bubble {
     padding: 11px 16px;
@@ -111,16 +106,6 @@
     border: 1px solid rgba(139, 92, 246, 0.22);
     color: #d8b4fe;
     border-bottom-left-radius: 4px;
-  }
-
-  .narrator .bubble {
-    background: transparent;
-    border: none;
-    color: #9a80b8;
-    font-style: italic;
-    font-size: 0.8rem;
-    padding: 6px 0;
-    line-height: 1.65;
   }
 
   .line.file {
@@ -152,29 +137,54 @@
   .macbeth .speaker { color: #c084fc; text-align: right; }
   .ai .speaker { color: #a78bfa; }
 
-  /* ── Typing bubble (input area look) ── */
-  .macbeth .bubble.typing-active {
-    min-height: 44px;
+  /* ── Typing input (textarea styled as bubble) ── */
+  .typing-input-wrap {
+    align-self: flex-end;
+    max-width: 82%;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .typing-input-wrap.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .typing-input-wrap .speaker {
+    color: #c084fc;
+    text-align: right;
+  }
+
+  .typing-textarea {
+    width: 100%;
+    background: linear-gradient(135deg, #6b21a8, #7c3aed);
+    color: #f3e8ff;
     border: 1px solid rgba(192, 132, 252, 0.35);
+    border-bottom-right-radius: 4px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    border-bottom-left-radius: 16px;
+    padding: 11px 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    letter-spacing: 0.01em;
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    overflow: hidden;
     animation: typingGlow 2s ease-in-out infinite;
+  }
+  .typing-textarea::placeholder {
+    color: rgba(243, 232, 255, 0.35);
+  }
+  .typing-textarea:focus {
+    border-color: rgba(192, 132, 252, 0.6);
   }
   @keyframes typingGlow {
     0%, 100% { border-color: rgba(192, 132, 252, 0.2); }
     50%      { border-color: rgba(192, 132, 252, 0.5); }
-  }
-
-  .typing-cursor {
-    display: inline-block;
-    width: 2px;
-    height: 1em;
-    background: #f3e8ff;
-    margin-left: 1px;
-    vertical-align: text-bottom;
-    animation: cursorBlink 0.6s step-end infinite;
-  }
-  @keyframes cursorBlink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
   }
 
   /* ── Sabotage Button ── */
@@ -245,7 +255,7 @@
     100% { opacity: 0; transform: translateY(-90px) scale(0.6); }
   }
 
-  /* ── Glitch overlay for sabotage ── */
+  /* ── Glitch overlay ── */
   .glitch-overlay {
     position: fixed; inset: 0;
     background: rgba(220,38,38,0);
@@ -295,10 +305,13 @@ let targetIntensity = 0;
 let redMode = false;
 let step = -1;
 let busy = false;
+
+// Typing state
 let typingMode = false;
 let typedCount = 0;
 let targetText = '';
-let typingBubble = null;
+let typingTextarea = null;
+let typingWrap = null;
 let typingResolve = null;
 const CHARS_PER_KEY = 2;
 
@@ -367,13 +380,13 @@ function drawWave(time) {
   requestAnimationFrame(drawWave);
 }
 
-// ── Add line (AI / file / narrator) ──
+// ── Add line (AI / file) ──
 function addLine({ type, text, speak, emoji }) {
   return new Promise(resolve => {
     const wrap = document.createElement('div');
     wrap.className = `line ${type}`;
 
-    if (type === 'narrator' || type === 'file') {
+    if (type === 'file') {
       wrap.innerHTML = `<div class="bubble">${text}</div>`;
     } else {
       const label = type === 'macbeth' ? 'Macbeth' : 'AI Assistant';
@@ -403,7 +416,7 @@ function addLine({ type, text, speak, emoji }) {
   });
 }
 
-// ── Start typing mode ──
+// ── Start typing mode (real textarea) ──
 function startTyping(text) {
   return new Promise(resolve => {
     typingMode = true;
@@ -411,42 +424,98 @@ function startTyping(text) {
     targetText = text;
     typingResolve = resolve;
 
-    // Create empty bubble that looks like an input field
-    const wrap = document.createElement('div');
-    wrap.className = 'line macbeth';
-    wrap.innerHTML = `<div class="speaker">Macbeth</div><div class="bubble typing-active"><span class="typing-cursor"></span></div>`;
+    // Create textarea styled as Macbeth bubble
+    typingWrap = document.createElement('div');
+    typingWrap.className = 'typing-input-wrap';
+    typingWrap.innerHTML = `
+      <div class="speaker">Macbeth</div>
+      <textarea class="typing-textarea" placeholder="Type something..." rows="1"></textarea>
+    `;
 
-    dialogue.appendChild(wrap);
+    dialogue.appendChild(typingWrap);
     dialogue.scrollTop = dialogue.scrollHeight;
-    requestAnimationFrame(() => wrap.classList.add('visible'));
+    requestAnimationFrame(() => typingWrap.classList.add('visible'));
 
-    typingBubble = wrap.querySelector('.bubble');
+    typingTextarea = typingWrap.querySelector('.typing-textarea');
+
+    // Auto-focus after animation
+    setTimeout(() => {
+      typingTextarea.focus();
+      dialogue.scrollTop = dialogue.scrollHeight;
+    }, 400);
+
+    // Listen for input on the real textarea
+    typingTextarea.addEventListener('input', onTypingInput);
+    typingTextarea.addEventListener('keydown', onTypingKeydown);
   });
 }
 
-function handleTypingKey() {
+function onTypingInput() {
   if (!typingMode) return;
 
+  // Each keystroke reveals chars from the target text
   typedCount += CHARS_PER_KEY;
-  if (typedCount >= targetText.length) {
-    typedCount = targetText.length;
-    finishTyping();
-    return;
-  }
+  if (typedCount > targetText.length) typedCount = targetText.length;
 
-  typingBubble.innerHTML = targetText.substring(0, typedCount) + '<span class="typing-cursor"></span>';
+  // Show the revealed portion of target text (ignore what they actually typed)
+  typingTextarea.value = targetText.substring(0, typedCount);
+
+  // Auto-grow textarea height
+  typingTextarea.style.height = 'auto';
+  typingTextarea.style.height = typingTextarea.scrollHeight + 'px';
+
   dialogue.scrollTop = dialogue.scrollHeight;
+
+  if (typedCount >= targetText.length) {
+    finishTyping();
+  }
+}
+
+function onTypingKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (typingMode) {
+      // Auto-complete if not done
+      if (typedCount < targetText.length) {
+        typedCount = targetText.length;
+        typingTextarea.value = targetText;
+      }
+      finishTyping();
+    }
+  }
 }
 
 function finishTyping() {
+  if (!typingMode) return;
   typingMode = false;
-  typingBubble.classList.remove('typing-active');
-  typingBubble.textContent = targetText;
+
+  // Remove textarea, replace with static bubble
+  const finalText = targetText;
+  typingTextarea.removeEventListener('input', onTypingInput);
+  typingTextarea.removeEventListener('keydown', onTypingKeydown);
+
+  // Swap textarea for a static bubble
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = finalText;
+
+  const speaker = typingWrap.querySelector('.speaker');
+  const oldTextarea = typingWrap.querySelector('.typing-textarea');
+  typingWrap.removeChild(oldTextarea);
+  typingWrap.appendChild(bubble);
+  typingWrap.classList.remove('typing-input-wrap');
+  typingWrap.classList.add('line', 'macbeth', 'visible');
+  // Remove the transition since it's already visible
+  typingWrap.style.opacity = '1';
+  typingWrap.style.transform = 'none';
+
   dialogue.scrollTop = dialogue.scrollHeight;
+
+  typingWrap = null;
+  typingTextarea = null;
 
   const resolve = typingResolve;
   typingResolve = null;
-  typingBubble = null;
   resolve();
 }
 
@@ -527,34 +596,19 @@ async function advance() {
     await addLine(s);
   }
 
-  // After each step, wait for Enter
+  // After each step, wait for Enter to continue
   await waitForEnter();
   busy = false;
 }
 
-// ── Input handling ──
+// ── Global Enter handler for advancing ──
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    if (typingMode) {
-      // Auto-complete typing
-      typedCount = targetText.length;
-      finishTyping();
-      return;
-    }
-    if (waitingForEnter) {
-      waitingForEnter = false;
-      const resolve = enterResolve;
-      enterResolve = null;
-      resolve();
-      return;
-    }
-    return;
-  }
-
-  // Any printable key: reveal characters in typing bubble
-  if (typingMode && e.key.length === 1) {
+  if (e.key === 'Enter' && waitingForEnter && !typingMode) {
     e.preventDefault();
-    handleTypingKey();
+    waitingForEnter = false;
+    const resolve = enterResolve;
+    enterResolve = null;
+    resolve();
   }
 });
 
