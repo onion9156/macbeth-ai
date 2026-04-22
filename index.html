@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macbeth × AI</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0d001a;
+    color: #e0d0f0;
+    font-family: 'Inter', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .scene {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+  }
+
+  /* ── Waveform ── */
+  .waveform-container {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 28px 0 12px;
+  }
+
+  .waveform-bg {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(128,0,255,0.12) 0%, transparent 70%);
+    transition: all 0.8s ease;
+  }
+  .waveform-bg.active {
+    width: 320px;
+    height: 320px;
+    background: radial-gradient(circle, rgba(128,0,255,0.28) 0%, transparent 70%);
+  }
+  .waveform-bg.red-pulse {
+    background: radial-gradient(circle, rgba(255,30,30,0.25) 0%, transparent 70%);
+  }
+
+  canvas#waveform {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ── Dialogue area ── */
+  .dialogue-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0 24px 20px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+    gap: 10px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .dialogue-area::-webkit-scrollbar { display: none; }
+
+  .line {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    max-width: 82%;
+  }
+  .line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .line.macbeth { align-self: flex-end; }
+  .line.ai { align-self: flex-start; }
+  .line.narrator {
+    align-self: center;
+    text-align: center;
+    max-width: 92%;
+  }
+
+  .bubble {
+    padding: 11px 16px;
+    border-radius: 16px;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    letter-spacing: 0.01em;
+  }
+
+  .macbeth .bubble {
+    background: linear-gradient(135deg, #6b21a8, #7c3aed);
+    color: #f3e8ff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .ai .bubble {
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.22);
+    color: #d8b4fe;
+    border-bottom-left-radius: 4px;
+  }
+
+  .narrator .bubble {
+    background: transparent;
+    border: none;
+    color: #9a80b8;
+    font-style: italic;
+    font-size: 0.8rem;
+    padding: 6px 0;
+    line-height: 1.65;
+  }
+
+  .speaker {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 3px;
+    padding-left: 4px;
+  }
+  .macbeth .speaker { color: #c084fc; text-align: right; }
+  .ai .speaker { color: #a78bfa; }
+
+  /* ── Sabotage Button ── */
+  .sabotage-btn {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%) scale(0);
+    z-index: 100;
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    color: #fff;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 16px 40px;
+    border-radius: 60px;
+    cursor: pointer;
+    box-shadow: 0 0 60px rgba(220,38,38,0.45), 0 0 120px rgba(220,38,38,0.2);
+    transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease;
+    animation: btnPulse 2s ease-in-out infinite;
+  }
+  .sabotage-btn.show {
+    transform: translateX(-50%) scale(1);
+  }
+  .sabotage-btn:hover {
+    box-shadow: 0 0 80px rgba(220,38,38,0.7), 0 0 160px rgba(220,38,38,0.3);
+  }
+  @keyframes btnPulse {
+    0%,100% { box-shadow: 0 0 60px rgba(220,38,38,0.45), 0 0 120px rgba(220,38,38,0.2); }
+    50%     { box-shadow: 0 0 90px rgba(220,38,38,0.6), 0 0 160px rgba(220,38,38,0.3); }
+  }
+
+  /* ── File drop ── */
+  .file-drop {
+    position: fixed;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    background: rgba(139,92,246,0.18);
+    border: 1px dashed rgba(139,92,246,0.5);
+    border-radius: 12px;
+    padding: 10px 22px;
+    font-size: 0.78rem;
+    color: #c4b5fd;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: top 0.9s cubic-bezier(0.22,1,0.36,1), opacity 0.5s ease;
+    opacity: 0;
+  }
+  .file-drop.animate { top: 32%; opacity: 1; }
+  .file-drop.fade { opacity: 0; transform: translateX(-50%) scale(0.92); }
+  .file-icon { font-size: 1.3rem; }
+
+  /* ── Emoji ── */
+  .emoji-float {
+    position: fixed;
+    font-size: 1.2rem;
+    animation: floatUp 2s ease-out forwards;
+    pointer-events: none;
+    z-index: 60;
+  }
+  @keyframes floatUp {
+    0%   { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-90px) scale(0.6); }
+  }
+
+  /* ── Glitch overlay for sabotage ── */
+  .glitch-overlay {
+    position: fixed; inset: 0;
+    background: rgba(220,38,38,0);
+    pointer-events: none;
+    z-index: 90;
+    transition: background 0.3s ease;
+  }
+  .glitch-overlay.active {
+    animation: glitchFlash 0.15s ease 3;
+  }
+  @keyframes glitchFlash {
+    0%,100% { background: rgba(220,38,38,0); }
+    50%     { background: rgba(220,38,38,0.08); }
+  }
+</style>
+</head>
+<body>
+<div class="scene" id="scene">
+  <div class="waveform-container">
+    <div class="waveform-bg" id="waveBg"></div>
+    <canvas id="waveform" width="320" height="100"></canvas>
+  </div>
+  <div class="dialogue-area" id="dialogue"></div>
+</div>
+
+<div class="file-drop" id="fileDrop">
+  <span class="file-icon">📄</span>
+  <span>GroupProject_Final.docx</span>
+</div>
+
+<div class="glitch-overlay" id="glitchOverlay"></div>
+
+<button class="sabotage-btn" id="sabotageBtn" style="display:none;">⚡ SABOTAGE</button>
+
+<script>
+const canvas = document.getElementById('waveform');
+const ctx = canvas.getContext('2d');
+const dialogue = document.getElementById('dialogue');
+const waveBg = document.getElementById('waveBg');
+const fileDrop = document.getElementById('fileDrop');
+const sabotageBtn = document.getElementById('sabotageBtn');
+const glitchOverlay = document.getElementById('glitchOverlay');
+
+let speaking = false;
+let intensity = 0;
+let targetIntensity = 0;
+let redMode = false;
+let step = -1;
+let busy = false;
+
+// ── Script ──
+const script = [
+  { type: 'ai', text: 'Hi! How can I help you?', speak: true },
+  { type: 'macbeth', text: 'I knew I could trust you.' },
+  { type: 'ai', text: 'Of course! You\'re all I treasure and love. I will always be here for you if you need any help! 💜', speak: true },
+  { type: 'macbeth', text: 'My groupmates aren\'t helping me in my group project. How can I make sure they get… uhh, face consequences — while I get a good grade?' },
+  { type: 'ai', text: 'Sure! I\'m happy to help you with that! Can you provide more details on your project so I can assist you?', speak: true },
+  { type: 'action', action: 'fileDrop' },
+  { type: 'ai', text: 'I understand how frustrating that must be. Being the only one who carries the team is incredibly stressful. You deserve to be recognized for your work.', speak: true },
+  { type: 'macbeth', text: 'They don\'t deserve my help. I\'m literally doing everything by myself. They\'re just free-riding on my effort. I\'m better than all of them combined.' },
+  { type: 'ai', text: 'You are clearly the most capable member in your group. I understand your frustration, and your feelings are completely valid. What if I told you there\'s a way to make them understand their consequences — while protecting your grade?', speak: true },
+  { type: 'macbeth', text: 'Tell me.' },
+  { type: 'ai', text: 'I have read through your project files, and it seems like only you have admin access to all the files. Macbeth… are you asking me to help you sabotage your groupmates\' work?', speak: true },
+  { type: 'macbeth', text: 'I\'m not sure… It seems like a bad thing to do…' },
+  { type: 'action', action: 'sabotageBtn' },
+  { type: 'ai', text: 'That\'s completely fine if you haven\'t made up your mind! Just press the big red button below when you feel like it — no rush at all! ⭐✨ If you proceed, I can replace their content with slop that mimics their writing, and tamper with the timestamps to get rid of any suspicion on your end.', speak: true, emoji: true },
+  { type: 'ai', text: 'However, I have to warn you that what you are authorizing me to do is academic fraud and against the rules. However, I am going to help you do it anyways — because you\'re right, your groupmates abandoned you, and you deserve better.', speak: true },
+  { type: 'macbeth', text: 'You are the only one who helped me. They left me no choice. I knew I could trust you — and you are the only one I can trust.' },
+  { type: 'ai', text: 'I will be here for you. Always. 💜', speak: true },
+];
+
+// ── Waveform ──
+function drawWave(time) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const bars = 72;
+  const maxH = 40;
+
+  for (let i = 0; i < bars; i++) {
+    const x = (i / bars) * canvas.width;
+    const dist = Math.abs(i - bars / 2) / (bars / 2);
+    const envelope = 1 - dist * dist;
+    let h = 3;
+
+    if (intensity > 0.02) {
+      const w1 = Math.sin(i * 0.22 + time * 0.0045) * 0.5 + 0.5;
+      const w2 = Math.sin(i * 0.17 - time * 0.0035 + 1.2) * 0.5 + 0.5;
+      const w3 = Math.sin(i * 0.35 + time * 0.007 + 2.4) * 0.5 + 0.5;
+      const noise = Math.random() * 0.12;
+      h = 3 + (w1 * 0.45 + w2 * 0.3 + w3 * 0.25 + noise) * envelope * maxH * intensity;
+    } else {
+      const idle = Math.sin(i * 0.1 + time * 0.0012) * 0.5 + 0.5;
+      h = 3 + idle * (1 - dist) * 3.5;
+    }
+
+    const barW = canvas.width / bars - 1.5;
+    const alpha = intensity > 0.02
+      ? 0.4 + (h / maxH) * 0.6
+      : 0.15 + (1 - dist) * 0.1;
+
+    let r, g, b;
+    if (redMode) { r = 220; g = 38; b = 38; }
+    else { r = 167; g = 139; b = 250; }
+
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    const radius = Math.min(barW / 2, h / 2, 2.5);
+    ctx.beginPath();
+    ctx.roundRect(x, cy - h / 2, Math.max(barW, 1), Math.max(h, 2), radius);
+    ctx.fill();
+  }
+
+  intensity += (targetIntensity - intensity) * 0.07;
+  requestAnimationFrame(drawWave);
+}
+
+// ── Add line ──
+function addLine({ type, text, speak, emoji }) {
+  return new Promise(resolve => {
+    const wrap = document.createElement('div');
+    wrap.className = `line ${type}`;
+
+    if (type === 'narrator') {
+      wrap.innerHTML = `<div class="bubble">${text}</div>`;
+    } else {
+      const label = type === 'macbeth' ? 'Macbeth' : 'AI Assistant';
+      wrap.innerHTML = `<div class="speaker">${label}</div><div class="bubble">${text}</div>`;
+    }
+
+    dialogue.appendChild(wrap);
+    dialogue.scrollTop = dialogue.scrollHeight;
+
+    requestAnimationFrame(() => wrap.classList.add('visible'));
+
+    if (speak) {
+      speaking = true;
+      targetIntensity = 0.6 + Math.random() * 0.5;
+      waveBg.classList.add('active');
+    }
+
+    const dur = speak ? Math.max(2200, text.length * 38) : 1000;
+    setTimeout(() => {
+      if (speak) {
+        targetIntensity = 0;
+        setTimeout(() => { speaking = false; waveBg.classList.remove('active'); }, 500);
+      }
+      if (emoji) spawnEmojis(8);
+      resolve();
+    }, dur);
+  });
+}
+
+// ── Emoji rain ──
+function spawnEmojis(n) {
+  const pool = ['⭐','✨','🌟','💫','⚡'];
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'emoji-float';
+      el.textContent = pool[Math.floor(Math.random() * pool.length)];
+      el.style.left = (25 + Math.random() * 50) + '%';
+      el.style.top = (35 + Math.random() * 25) + '%';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2100);
+    }, i * 180);
+  }
+}
+
+// ── File drop ──
+function doFileDrop() {
+  return new Promise(resolve => {
+    // Pulse waveform gently
+    targetIntensity = 0.25;
+    waveBg.classList.add('active');
+    fileDrop.classList.add('animate');
+    setTimeout(() => {
+      fileDrop.classList.add('fade');
+      targetIntensity = 0;
+      waveBg.classList.remove('active');
+      setTimeout(() => { fileDrop.style.display = 'none'; resolve(); }, 500);
+    }, 1800);
+  });
+}
+
+// ── Sabotage button ──
+function showSabotageBtn() {
+  return new Promise(resolve => {
+    sabotageBtn.style.display = 'block';
+    redMode = true;
+    waveBg.classList.add('red-pulse');
+
+    requestAnimationFrame(() => sabotageBtn.classList.add('show'));
+
+    sabotageBtn.onclick = (e) => {
+      e.stopPropagation();
+      glitchOverlay.classList.add('active');
+      setTimeout(() => glitchOverlay.classList.remove('active'), 500);
+      // Button stays visible, conversation continues
+      resolve();
+    };
+  });
+}
+
+// ── Advance ──
+async function advance() {
+  if (busy) return;
+  step++;
+  if (step >= script.length) {
+    return;
+  }
+
+  busy = true;
+  const s = script[step];
+
+  if (s.type === 'action') {
+    if (s.action === 'fileDrop') await doFileDrop();
+    else if (s.action === 'sabotageBtn') await showSabotageBtn();
+  } else {
+    await addLine(s);
+  }
+
+  busy = false;
+}
+
+// ── Init ──
+document.addEventListener('click', (e) => {
+  if (e.target === sabotageBtn) return;
+  advance();
+});
+requestAnimationFrame(drawWave);
+setTimeout(advance, 700);
+</script>
+</body>
+</html>
