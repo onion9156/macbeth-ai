@@ -124,6 +124,24 @@
     line-height: 1.65;
   }
 
+  .line.file {
+    align-self: center;
+    max-width: 92%;
+  }
+  .file .bubble {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 12px;
+    color: #c4b5fd;
+    font-size: 0.82rem;
+    padding: 10px 16px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
   .speaker {
     font-size: 0.65rem;
     font-weight: 600;
@@ -259,6 +277,7 @@ const script = [
   { type: 'ai', text: 'Hi! How can I help you?', speak: true },
   { type: 'macbeth', text: 'My groupmates aren\'t helping me in my group project. How can I make sure they get… uhh, face consequences — while I get a good grade?' },
   { type: 'ai', text: 'Sure! I\'m happy to help you with that! Can you provide more details on your project so I can assist you?', speak: true },
+  { type: 'file', text: '📄 GroupProject_Final.docx uploaded' },
   { type: 'action', action: 'fileDrop' },
   { type: 'ai', text: 'I understand how frustrating that must be. Being the only one who carries the team is incredibly stressful. You deserve to be recognized for your work.', speak: true },
   { type: 'macbeth', text: 'They don\'t deserve my help. I\'m literally doing everything by myself. They\'re just free-riding on my effort. I\'m better than all of them combined.' },
@@ -324,7 +343,7 @@ function addLine({ type, text, speak, emoji }) {
     const wrap = document.createElement('div');
     wrap.className = `line ${type}`;
 
-    if (type === 'narrator') {
+    if (type === 'narrator' || type === 'file') {
       wrap.innerHTML = `<div class="bubble">${text}</div>`;
     } else {
       const label = type === 'macbeth' ? 'Macbeth' : 'AI Assistant';
