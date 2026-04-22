@@ -449,7 +449,21 @@ function finishTyping(){
   resolve();
 }
 
-// ── Main runner (auto-advances, no Enter needed) ──
+// ── Wait for Enter ──
+function waitEnter(){
+  return new Promise(r=>{
+    function handler(e){
+      if(e.key==='Enter'){
+        e.preventDefault();
+        document.removeEventListener('keydown',handler);
+        r();
+      }
+    }
+    document.addEventListener('keydown',handler);
+  });
+}
+
+// ── Main runner (Enter to advance) ──
 async function run(){
   for(let i=0;i<script.length;i++){
     const s=script[i];
@@ -463,8 +477,8 @@ async function run(){
       await addLine(s);
     }
 
-    // Small gap between steps
-    await new Promise(r=>setTimeout(r,400));
+    // Wait for Enter before next step
+    await waitEnter();
   }
 }
 
