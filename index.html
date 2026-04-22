@@ -15,7 +15,6 @@
     font-family: 'Inter', sans-serif;
     height: 100vh;
     overflow: hidden;
-    cursor: pointer;
     user-select: none;
   }
 
@@ -153,6 +152,21 @@
   .macbeth .speaker { color: #c084fc; text-align: right; }
   .ai .speaker { color: #a78bfa; }
 
+  /* ── Typing cursor ── */
+  .typing-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: #f3e8ff;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    animation: cursorBlink 0.6s step-end infinite;
+  }
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
   /* ── Sabotage Button ── */
   .sabotage-btn {
     position: fixed;
@@ -236,6 +250,16 @@
     0%,100% { background: rgba(220,38,38,0); }
     50%     { background: rgba(220,38,38,0.08); }
   }
+
+  /* ── Hidden input for capturing keystrokes ── */
+  #hiddenInput {
+    position: fixed;
+    top: -100px;
+    left: -100px;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
 </style>
 </head>
 <body>
@@ -246,6 +270,8 @@
   </div>
   <div class="dialogue-area" id="dialogue"></div>
 </div>
+
+<input id="hiddenInput" type="text" autocomplete="off" />
 
 <div class="file-drop" id="fileDrop">
   <span class="file-icon">📄</span>
@@ -264,6 +290,7 @@ const waveBg = document.getElementById('waveBg');
 const fileDrop = document.getElementById('fileDrop');
 const sabotageBtn = document.getElementById('sabotageBtn');
 const glitchOverlay = document.getElementById('glitchOverlay');
+const hiddenInput = document.getElementById('hiddenInput');
 
 let speaking = false;
 let intensity = 0;
@@ -271,6 +298,12 @@ let targetIntensity = 0;
 let redMode = false;
 let step = -1;
 let busy = false;
+let typingMode = false;       // are we in user-typing mode?
+let typedCount = 0;           // how many chars revealed so far
+let targetText = '';           // the full text to type
+let typingBubble = null;       // reference to the bubble element
+let typingResolve = null;      // promise resolver for when typing finishes
+const CHARS_PER_KEY = 2;       // how many chars each keystroke reveals
 
 // ── Script ──
 const script = [
@@ -337,7 +370,7 @@ function drawWave(time) {
   requestAnimationFrame(drawWave);
 }
 
-// ── Add line ──
+// ── Add line (non-macbeth, or completed macbeth) ──
 function addLine({ type, text, speak, emoji }) {
   return new Promise(resolve => {
     const wrap = document.createElement('div');
@@ -373,6 +406,58 @@ function addLine({ type, text, speak, emoji }) {
   });
 }
 
+// ── Start typing mode for macbeth ──
+function startTyping(text) {
+  return new Promise(resolve => {
+    typingMode = true;
+    typedCount = 0;
+    targetText = text;
+    typingResolve = resolve;
+
+    // Create bubble with typing cursor
+    const wrap = document.createElement('div');
+    wrap.className = 'line macbeth';
+    wrap.innerHTML = `<div class="speaker">Macbeth</div><div class="bubble"><span class="typing-cursor"></span></div>`;
+
+    dialogue.appendChild(wrap);
+    dialogue.scrollTop = dialogue.scrollHeight;
+    requestAnimationFrame(() => wrap.classList.add('visible'));
+
+    typingBubble = wrap.querySelector('.bubble');
+
+    // Focus hidden input to capture keystrokes
+    hiddenInput.value = '';
+    hiddenInput.focus();
+  });
+}
+
+function handleTypingKey() {
+  if (!typingMode) return;
+
+  typedCount += CHARS_PER_KEY;
+  if (typedCount >= targetText.length) {
+    typedCount = targetText.length;
+    finishTyping();
+    return;
+  }
+
+  // Update bubble with revealed text + cursor
+  typingBubble.innerHTML = targetText.substring(0, typedCount) + '<span class="typing-cursor"></span>';
+  dialogue.scrollTop = dialogue.scrollHeight;
+}
+
+function finishTyping() {
+  typingMode = false;
+  // Show full text, remove cursor
+  typingBubble.textContent = targetText;
+  dialogue.scrollTop = dialogue.scrollHeight;
+
+  const resolve = typingResolve;
+  typingResolve = null;
+  typingBubble = null;
+  resolve();
+}
+
 // ── Emoji rain ──
 function spawnEmojis(n) {
   const pool = ['⭐','✨','🌟','💫','⚡'];
@@ -392,7 +477,6 @@ function spawnEmojis(n) {
 // ── File drop ──
 function doFileDrop() {
   return new Promise(resolve => {
-    // Pulse waveform gently
     targetIntensity = 0.25;
     waveBg.classList.add('active');
     fileDrop.classList.add('animate');
@@ -418,7 +502,6 @@ function showSabotageBtn() {
       e.stopPropagation();
       glitchOverlay.classList.add('active');
       setTimeout(() => glitchOverlay.classList.remove('active'), 500);
-      // Button stays visible, conversation continues
       resolve();
     };
   });
@@ -426,7 +509,7 @@ function showSabotageBtn() {
 
 // ── Advance ──
 async function advance() {
-  if (busy) return;
+  if (busy || typingMode) return;
   step++;
   if (step >= script.length) {
     return;
@@ -438,6 +521,8 @@ async function advance() {
   if (s.type === 'action') {
     if (s.action === 'fileDrop') await doFileDrop();
     else if (s.action === 'sabotageBtn') await showSabotageBtn();
+  } else if (s.type === 'macbeth') {
+    await startTyping(s.text);
   } else {
     await addLine(s);
   }
@@ -445,11 +530,35 @@ async function advance() {
   busy = false;
 }
 
-// ── Init ──
+// ── Input handling ──
+// Capture keystrokes in hidden input for typing mode
+hiddenInput.addEventListener('input', () => {
+  if (typingMode) {
+    hiddenInput.value = ''; // clear so it never fills up
+    handleTypingKey();
+  }
+});
+
+// Click to advance (for AI lines, actions, etc.)
 document.addEventListener('click', (e) => {
   if (e.target === sabotageBtn) return;
+  if (typingMode) {
+    hiddenInput.focus();
+    return;
+  }
   advance();
 });
+
+// Keep hidden input focused during typing
+document.addEventListener('keydown', (e) => {
+  if (typingMode) {
+    // Let the input event handle it, but prevent other defaults
+    if (e.key === 'Tab' || e.key === 'Escape') return; // allow these
+    hiddenInput.focus();
+  }
+});
+
+// ── Init ──
 requestAnimationFrame(drawWave);
 setTimeout(advance, 700);
 </script>
