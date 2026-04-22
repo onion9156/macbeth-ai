@@ -152,7 +152,17 @@
   .macbeth .speaker { color: #c084fc; text-align: right; }
   .ai .speaker { color: #a78bfa; }
 
-  /* ── Typing cursor ── */
+  /* ── Typing bubble (input area look) ── */
+  .macbeth .bubble.typing-active {
+    min-height: 44px;
+    border: 1px solid rgba(192, 132, 252, 0.35);
+    animation: typingGlow 2s ease-in-out infinite;
+  }
+  @keyframes typingGlow {
+    0%, 100% { border-color: rgba(192, 132, 252, 0.2); }
+    50%      { border-color: rgba(192, 132, 252, 0.5); }
+  }
+
   .typing-cursor {
     display: inline-block;
     width: 2px;
@@ -250,11 +260,6 @@
     0%,100% { background: rgba(220,38,38,0); }
     50%     { background: rgba(220,38,38,0.08); }
   }
-
-  /* ── Hidden input for capturing keystrokes ── */
-  #hiddenInput {
-    display: none;
-  }
 </style>
 </head>
 <body>
@@ -265,8 +270,6 @@
   </div>
   <div class="dialogue-area" id="dialogue"></div>
 </div>
-
-<input id="hiddenInput" type="text" autocomplete="off" />
 
 <div class="file-drop" id="fileDrop">
   <span class="file-icon">📄</span>
@@ -285,7 +288,6 @@ const waveBg = document.getElementById('waveBg');
 const fileDrop = document.getElementById('fileDrop');
 const sabotageBtn = document.getElementById('sabotageBtn');
 const glitchOverlay = document.getElementById('glitchOverlay');
-const hiddenInput = document.getElementById('hiddenInput');
 
 let speaking = false;
 let intensity = 0;
@@ -293,12 +295,12 @@ let targetIntensity = 0;
 let redMode = false;
 let step = -1;
 let busy = false;
-let typingMode = false;       // are we in user-typing mode?
-let typedCount = 0;           // how many chars revealed so far
-let targetText = '';           // the full text to type
-let typingBubble = null;       // reference to the bubble element
-let typingResolve = null;      // promise resolver for when typing finishes
-const CHARS_PER_KEY = 2;       // how many chars each keystroke reveals
+let typingMode = false;
+let typedCount = 0;
+let targetText = '';
+let typingBubble = null;
+let typingResolve = null;
+const CHARS_PER_KEY = 2;
 
 // ── Script ──
 const script = [
@@ -365,7 +367,7 @@ function drawWave(time) {
   requestAnimationFrame(drawWave);
 }
 
-// ── Add line (non-macbeth, or completed macbeth) ──
+// ── Add line (AI / file / narrator) ──
 function addLine({ type, text, speak, emoji }) {
   return new Promise(resolve => {
     const wrap = document.createElement('div');
@@ -401,7 +403,7 @@ function addLine({ type, text, speak, emoji }) {
   });
 }
 
-// ── Start typing mode for macbeth ──
+// ── Start typing mode ──
 function startTyping(text) {
   return new Promise(resolve => {
     typingMode = true;
@@ -409,20 +411,16 @@ function startTyping(text) {
     targetText = text;
     typingResolve = resolve;
 
-    // Create bubble with typing cursor
+    // Create empty bubble that looks like an input field
     const wrap = document.createElement('div');
     wrap.className = 'line macbeth';
-    wrap.innerHTML = `<div class="speaker">Macbeth</div><div class="bubble"><span class="typing-cursor"></span></div>`;
+    wrap.innerHTML = `<div class="speaker">Macbeth</div><div class="bubble typing-active"><span class="typing-cursor"></span></div>`;
 
     dialogue.appendChild(wrap);
     dialogue.scrollTop = dialogue.scrollHeight;
     requestAnimationFrame(() => wrap.classList.add('visible'));
 
     typingBubble = wrap.querySelector('.bubble');
-
-    // Focus hidden input to capture keystrokes
-    hiddenInput.value = '';
-    hiddenInput.focus();
   });
 }
 
@@ -436,14 +434,13 @@ function handleTypingKey() {
     return;
   }
 
-  // Update bubble with revealed text + cursor
   typingBubble.innerHTML = targetText.substring(0, typedCount) + '<span class="typing-cursor"></span>';
   dialogue.scrollTop = dialogue.scrollHeight;
 }
 
 function finishTyping() {
   typingMode = false;
-  // Show full text, remove cursor
+  typingBubble.classList.remove('typing-active');
   typingBubble.textContent = targetText;
   dialogue.scrollTop = dialogue.scrollHeight;
 
@@ -516,9 +513,7 @@ function waitForEnter() {
 async function advance() {
   if (busy || typingMode) return;
   step++;
-  if (step >= script.length) {
-    return;
-  }
+  if (step >= script.length) return;
 
   busy = true;
   const s = script[step];
@@ -532,17 +527,16 @@ async function advance() {
     await addLine(s);
   }
 
-  // After each step completes, wait for Enter to continue
+  // After each step, wait for Enter
   await waitForEnter();
   busy = false;
 }
 
 // ── Input handling ──
 document.addEventListener('keydown', (e) => {
-  // Enter advances after each step
   if (e.key === 'Enter') {
     if (typingMode) {
-      // Finish typing immediately
+      // Auto-complete typing
       typedCount = targetText.length;
       finishTyping();
       return;
@@ -557,7 +551,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Any other key: if typing mode, reveal characters
+  // Any printable key: reveal characters in typing bubble
   if (typingMode && e.key.length === 1) {
     e.preventDefault();
     handleTypingKey();
