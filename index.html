@@ -253,12 +253,7 @@
 
   /* ── Hidden input for capturing keystrokes ── */
   #hiddenInput {
-    position: fixed;
-    top: -100px;
-    left: -100px;
-    opacity: 0;
-    width: 1px;
-    height: 1px;
+    display: none;
   }
 </style>
 </head>
@@ -543,22 +538,13 @@ async function advance() {
 }
 
 // ── Input handling ──
-// Capture keystrokes in hidden input for typing mode
-hiddenInput.addEventListener('input', () => {
-  if (typingMode) {
-    hiddenInput.value = '';
-    handleTypingKey();
-  }
-});
-
-// Enter to advance / submit typing
 document.addEventListener('keydown', (e) => {
+  // Enter advances after each step
   if (e.key === 'Enter') {
     if (typingMode) {
-      // Finish typing immediately if not done yet
+      // Finish typing immediately
       typedCount = targetText.length;
       finishTyping();
-      // finishTyping resolves the promise, waitForEnter will now block
       return;
     }
     if (waitingForEnter) {
@@ -568,10 +554,13 @@ document.addEventListener('keydown', (e) => {
       resolve();
       return;
     }
+    return;
   }
-  // Keep hidden input focused during typing
-  if (typingMode) {
-    hiddenInput.focus();
+
+  // Any other key: if typing mode, reveal characters
+  if (typingMode && e.key.length === 1) {
+    e.preventDefault();
+    handleTypingKey();
   }
 });
 
